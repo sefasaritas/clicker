@@ -652,13 +652,14 @@ require_once 'config.php';
         }
 
         function passiveIncome() {
-            if (gameState.coinsPerSecond > 0) {
-                gameState.coins += gameState.coinsPerSecond;
-                gameState.xp += gameState.coinsPerSecond * 0.1;
-                checkLevelUp();
-                updateUI();
-            }
-        }
+    if (gameState.coinsPerSecond > 0) {
+        gameState.coins += gameState.coinsPerSecond;
+        gameState.xp += gameState.coinsPerSecond * 0.1;
+        checkLevelUp();
+        updateUI();
+        updateUpgrades(); // Bu satırı ekleyin - her saniye yükseltmeler de güncellensin
+    }
+}
 
         function checkLevelUp() {
             const xpRequired = gameState.level * 100;
@@ -686,26 +687,29 @@ require_once 'config.php';
         }
 
         function buyUpgrade(upgradeType) {
-            const upgrade = upgradeDefinitions[upgradeType];
-            const currentLevel = gameState.upgrades[upgradeType];
-            const cost = Math.floor(upgrade.baseCost * Math.pow(upgrade.multiplier, currentLevel));
-            
-            if (gameState.coins >= cost) {
-                gameState.coins -= cost;
-                gameState.upgrades[upgradeType]++;
-                
-                // Yükseltme etkilerini uygula
-                recalculateStats();
-                updateUI();
-                updateUpgrades();
-                
-                // XP kazanımı
-                gameState.xp += cost * 0.1;
-                checkLevelUp();
-            } else {
-                showMessage('Yeterli coin yok!', 'error');
-            }
-        }
+    const upgrade = upgradeDefinitions[upgradeType];
+    const currentLevel = gameState.upgrades[upgradeType];
+    const cost = Math.floor(upgrade.baseCost * Math.pow(upgrade.multiplier, currentLevel));
+    
+    if (gameState.coins >= cost) {
+        gameState.coins -= cost;
+        gameState.upgrades[upgradeType]++;
+        
+        // Yükseltme etkilerini uygula
+        recalculateStats();
+        updateUI();
+        updateUpgrades(); // Bu satır zaten var, sorun değil
+        
+        // XP kazanımı
+        gameState.xp += cost * 0.1;
+        checkLevelUp();
+        
+        // Oyunu kaydet
+        saveGame();
+    } else {
+        showMessage('Yeterli coin yok!', 'error');
+    }
+}
 
         function recalculateStats() {
             // Tıklama gücünü hesapla
