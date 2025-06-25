@@ -1,3 +1,6 @@
+<?php
+require_once 'config.php';
+?>
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -82,6 +85,12 @@
         button:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .game-area {
@@ -241,6 +250,29 @@
             margin-top: 10px;
         }
 
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .message.success {
+            background: rgba(76, 175, 80, 0.3);
+            color: #4CAF50;
+        }
+
+        .message.error {
+            background: rgba(244, 67, 54, 0.3);
+            color: #f44336;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 10px;
+        }
+
         @media (max-width: 768px) {
             .game-area {
                 grid-template-columns: 1fr;
@@ -258,6 +290,9 @@
             <h1>🚀 Bitcoin Clicker Game</h1>
             <p>Tıkla, Kazan, Yükselt!</p>
         </div>
+
+        <!-- Mesaj Alanı -->
+        <div id="messageArea"></div>
 
         <!-- Giriş/Kayıt Sistemi -->
         <div id="authSection" class="auth-section">
@@ -281,6 +316,10 @@
                     <input type="password" id="regPassword" placeholder="Şifre">
                     <button onclick="register()">Kayıt Ol</button>
                 </div>
+            </div>
+
+            <div class="loading" id="authLoading">
+                <p>İşlem yapılıyor...</p>
             </div>
         </div>
 
@@ -377,9 +416,6 @@
             achievements: []
         };
 
-        // Kullanıcı Veritabanı (LocalStorage simülasyonu)
-        let users = JSON.parse(localStorage.getItem('bitcoinClickerUsers') || '{}');
-
         // Yükseltme Tanımları
         const upgradeDefinitions = {
             clickUpgrade: {
@@ -422,9 +458,45 @@
             { id: 'level_10', name: 'Seviye 10', description: '10. seviyeye ulaş', requirement: () => gameState.level >= 10 }
         ];
 
+        // API İşlemleri
+        async function apiRequest(action, data = {}) {
+            try {
+                const response = await fetch('api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: action,
+                        ...data
+                    })
+                });
+
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('API Hatası:', error);
+                showMessage('Bağlantı hatası oluştu', 'error');
+                return { success: false, message: 'Bağlantı hatası' };
+            }
+        }
+
+        // Mesaj Gösterme
+        function showMessage(message, type = 'info') {
+            const messageArea = document.getElementById('messageArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = message;
+            messageArea.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+
         // Giriş/Kayıt İşlemleri
         function showTab(tab) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#authSection .tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             
             if (tab === 'login') {
@@ -436,67 +508,69 @@
             }
         }
 
-        function register() {
-            const username = document.getElementById('regUsername').value;
-            const email = document.getElementById('regEmail').value;
+        async function register() {
+            const username = document.getElementById('regUsername').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
             const password = document.getElementById('regPassword').value;
 
             if (!username || !email || !password) {
-                alert('Tüm alanları doldurun!');
+                showMessage('Tüm alanları doldurun!', 'error');
                 return;
             }
 
-            if (users[username]) {
-                alert('Bu kullanıcı adı zaten alınmış!');
-                return;
+            document.getElementById('authLoading').style.display = 'block';
+
+            const result = await apiRequest('register', {
+                username: username,
+                email: email,
+                password: password
+            });
+
+            document.getElementById('authLoading').style.display = 'none';
+
+            if (result.success) {
+                showMessage(result.message, 'success');
+                // Formu temizle ve giriş sekmesine geç
+                document.getElementById('regUsername').value = '';
+                document.getElementById('regEmail').value = '';
+                document.getElementById('regPassword').value = '';
+                showTab('login');
+            } else {
+                showMessage(result.message, 'error');
             }
-
-            users[username] = {
-                username,
-                email,
-                password: btoa(password), // Basit şifreleme
-                coins: 0,
-                clickPower: 1,
-                coinsPerSecond: 0,
-                totalClicks: 0,
-                level: 1,
-                xp: 0,
-                upgrades: { clickUpgrade: 0, autoMiner: 0, server: 0, blockchain: 0 },
-                achievements: [],
-                joinDate: Date.now()
-            };
-
-            localStorage.setItem('bitcoinClickerUsers', JSON.stringify(users));
-            alert('Kayıt başarılı! Şimdi giriş yapabilirsiniz.');
-            
-            // Formu temizle
-            document.getElementById('regUsername').value = '';
-            document.getElementById('regEmail').value = '';
-            document.getElementById('regPassword').value = '';
         }
 
-        function login() {
-            const username = document.getElementById('loginUsername').value;
+        async function login() {
+            const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
 
             if (!username || !password) {
-                alert('Kullanıcı adı ve şifre gerekli!');
+                showMessage('Kullanıcı adı ve şifre gerekli!', 'error');
                 return;
             }
 
-            const user = users[username];
-            if (!user || user.password !== btoa(password)) {
-                alert('Hatalı kullanıcı adı veya şifre!');
-                return;
-            }
+            document.getElementById('authLoading').style.display = 'block';
 
-            // Oyun durumunu yükle
-            gameState = { ...user, currentUser: username };
-            startGame();
+            const result = await apiRequest('login', {
+                username: username,
+                password: password
+            });
+
+            document.getElementById('authLoading').style.display = 'none';
+
+            if (result.success) {
+                showMessage(result.message, 'success');
+                gameState = { ...result.data.gameData, currentUser: result.data.user };
+                startGame();
+            } else {
+                showMessage(result.message, 'error');
+            }
         }
 
-        function logout() {
-            saveGame();
+        async function logout() {
+            await saveGame();
+            const result = await apiRequest('logout');
+            
             gameState = {
                 currentUser: null,
                 coins: 0,
@@ -511,27 +585,43 @@
             
             document.getElementById('authSection').style.display = 'block';
             document.getElementById('gameArea').classList.remove('active');
+            showMessage('Çıkış yapıldı', 'success');
         }
 
         function startGame() {
             document.getElementById('authSection').style.display = 'none';
             document.getElementById('gameArea').classList.add('active');
-            document.getElementById('currentUser').textContent = gameState.currentUser;
+            document.getElementById('currentUser').textContent = gameState.currentUser.username;
             
+            recalculateStats();
             updateUI();
             updateUpgrades();
             updateAchievements();
-            updateLeaderboard();
+            loadLeaderboard();
             
-            // Otomatik kazanç başlat
-            setInterval(passiveIncome, 1000);
-            setInterval(saveGame, 5000); // Her 5 saniyede kaydet
+            // Otomatik işlemler
+            if (!window.gameIntervals) {
+                window.gameIntervals = {
+                    passive: setInterval(passiveIncome, 1000),
+                    save: setInterval(saveGame, 10000), // Her 10 saniyede kaydet
+                    leaderboard: setInterval(loadLeaderboard, 30000) // Her 30 saniyede liderlik tablosunu güncelle
+                };
+            }
         }
 
-        function saveGame() {
+        async function saveGame() {
             if (gameState.currentUser) {
-                users[gameState.currentUser] = { ...gameState };
-                localStorage.setItem('bitcoinClickerUsers', JSON.stringify(users));
+                await apiRequest('save_game', {
+                    gameData: {
+                        coins: gameState.coins,
+                        clickPower: gameState.clickPower,
+                        coinsPerSecond: gameState.coinsPerSecond,
+                        totalClicks: gameState.totalClicks,
+                        level: gameState.level,
+                        xp: gameState.xp,
+                        upgrades: gameState.upgrades
+                    }
+                });
             }
         }
 
@@ -575,18 +665,23 @@
             if (gameState.xp >= xpRequired) {
                 gameState.level++;
                 gameState.xp -= xpRequired;
-                alert(`🎉 Seviye ${gameState.level}'e yükseldin!`);
+                showMessage(`🎉 Seviye ${gameState.level}'e yükseldin!`, 'success');
                 checkAchievements();
             }
         }
 
-        function checkAchievements() {
-            achievementDefinitions.forEach(achievement => {
+        async function checkAchievements() {
+            for (const achievement of achievementDefinitions) {
                 if (!gameState.achievements.includes(achievement.id) && achievement.requirement()) {
                     gameState.achievements.push(achievement.id);
-                    alert(`🎖️ Başarım Kazandın: ${achievement.name}`);
+                    showMessage(`🎖️ Başarım Kazandın: ${achievement.name}`, 'success');
+                    
+                    // Sunucuya başarım kaydet
+                    await apiRequest('unlock_achievement', {
+                        achievementId: achievement.id
+                    });
                 }
-            });
+            }
             updateAchievements();
         }
 
@@ -608,7 +703,7 @@
                 gameState.xp += cost * 0.1;
                 checkLevelUp();
             } else {
-                alert('Yeterli coin yok!');
+                showMessage('Yeterli coin yok!', 'error');
             }
         }
 
@@ -638,9 +733,6 @@
             
             const xpProgress = (gameState.xp / xpRequired) * 100;
             document.getElementById('xpBar').style.width = xpProgress + '%';
-            
-            // Yükseltmeleri de güncelle
-            updateUpgrades();
         }
 
         function updateUpgrades() {
@@ -660,7 +752,7 @@
                         <strong>${upgrade.name}</strong> (Lv.${currentLevel})
                         <br><small>${upgrade.description}</small>
                     </div>
-                    <button onclick="buyUpgrade('${upgradeType}')" ${!canAfford ? 'disabled' : ''} style="${!canAfford ? 'opacity: 0.5; cursor: not-allowed;' : 'opacity: 1; cursor: pointer;'}">
+                    <button onclick="buyUpgrade('${upgradeType}')" ${!canAfford ? 'disabled' : ''}>
                         ${formatNumber(cost)} Coin
                     </button>
                 `;
@@ -687,27 +779,26 @@
             });
         }
 
-        function updateLeaderboard() {
-            const leaderboardList = document.getElementById('leaderboardList');
-            leaderboardList.innerHTML = '';
+        async function loadLeaderboard() {
+            const result = await apiRequest('get_leaderboard');
             
-            // Kullanıcıları sırala
-            const sortedUsers = Object.values(users)
-                .sort((a, b) => b.coins - a.coins)
-                .slice(0, 10);
-            
-            sortedUsers.forEach((user, index) => {
-                const leaderboardDiv = document.createElement('div');
-                leaderboardDiv.className = 'leaderboard-item';
-                leaderboardDiv.innerHTML = `
-                    <div>
-                        <strong>#${index + 1} ${user.username}</strong>
-                        <br><small>Seviye ${user.level}</small>
-                    </div>
-                    <div>${formatNumber(user.coins)} Coin</div>
-                `;
-                leaderboardList.appendChild(leaderboardDiv);
-            });
+            if (result.success) {
+                const leaderboardList = document.getElementById('leaderboardList');
+                leaderboardList.innerHTML = '';
+                
+                result.data.forEach((user, index) => {
+                    const leaderboardDiv = document.createElement('div');
+                    leaderboardDiv.className = 'leaderboard-item';
+                    leaderboardDiv.innerHTML = `
+                        <div>
+                            <strong>#${index + 1} ${user.username}</strong>
+                            <br><small>Seviye ${user.level} - ${formatNumber(user.total_clicks)} tıklama</small>
+                        </div>
+                        <div>${formatNumber(user.coins)} Coin</div>
+                    `;
+                    leaderboardList.appendChild(leaderboardDiv);
+                });
+            }
         }
 
         function showRightTab(tab) {
@@ -720,7 +811,7 @@
             } else {
                 document.getElementById('upgradesTab').style.display = 'none';
                 document.getElementById('leaderboardTab').style.display = 'block';
-                updateLeaderboard();
+                loadLeaderboard();
             }
         }
 
@@ -731,6 +822,13 @@
             if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
             return Math.floor(num).toString();
         }
+
+        // Sayfa kapatılırken oyunu kaydet
+        window.addEventListener('beforeunload', function() {
+            if (gameState.currentUser) {
+                saveGame();
+            }
+        });
 
         // Oyun başlangıcında çalışacak
         document.addEventListener('DOMContentLoaded', function() {

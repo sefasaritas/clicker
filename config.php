@@ -1,9 +1,9 @@
 <?php
 // Veritabanı bağlantı ayarları
 define('DB_HOST', 'localhost');
-define('DB_USERNAME', 'root');
-define('DB_PASSWORD', '');
-define('DB_NAME', 'bitcoin_clicker');
+define('DB_USERNAME', 'sql_clicker');
+define('DB_PASSWORD', 'sjSZ7aYFhwHyzbTh');
+define('DB_NAME', 'sql_clicker');
 
 // Veritabanı bağlantısı
 try {
