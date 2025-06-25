@@ -603,6 +603,10 @@
                 recalculateStats();
                 updateUI();
                 updateUpgrades();
+                
+                // XP kazanımı
+                gameState.xp += cost * 0.1;
+                checkLevelUp();
             } else {
                 alert('Yeterli coin yok!');
             }
@@ -634,6 +638,9 @@
             
             const xpProgress = (gameState.xp / xpRequired) * 100;
             document.getElementById('xpBar').style.width = xpProgress + '%';
+            
+            // Yükseltmeleri de güncelle
+            updateUpgrades();
         }
 
         function updateUpgrades() {
@@ -653,7 +660,7 @@
                         <strong>${upgrade.name}</strong> (Lv.${currentLevel})
                         <br><small>${upgrade.description}</small>
                     </div>
-                    <button onclick="buyUpgrade('${upgradeType}')" ${!canAfford ? 'disabled' : ''}>
+                    <button onclick="buyUpgrade('${upgradeType}')" ${!canAfford ? 'disabled' : ''} style="${!canAfford ? 'opacity: 0.5; cursor: not-allowed;' : 'opacity: 1; cursor: pointer;'}">
                         ${formatNumber(cost)} Coin
                     </button>
                 `;
